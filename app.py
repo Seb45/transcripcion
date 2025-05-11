@@ -141,7 +141,7 @@ def init_db():
 
 init_db()
 
-st.title("🤖 Asistente de Interacción con Clientes (con Gemini)")
+#st.title("🤖 Asistente de Interacción con Clientes (con Gemini)")
 
 # --- Transcripción de Voz ---
 st.header("🎤 Transcripción de Voz")
@@ -224,16 +224,6 @@ rewritten_text_display = st.text_area("Texto Reescrito:", value=st.session_state
 if rewritten_text_display != st.session_state.rewritten_text:
     st.session_state.rewritten_text = rewritten_text_display
 
-# --- Copiar al Portapapeles ---
-if st.button("Copiar Texto Reescrito al Portapapeles 📋"):
-    if st.session_state.rewritten_text:
-        try:
-            pyperclip.copy(st.session_state.rewritten_text)
-            st.success("¡Texto reescrito copiado al portapapeles!")
-        except pyperclip.PyperclipException as e:
-            st.error(f"No se pudo copiar al portapapeles: {e}. Asegúrate de tener 'xclip' o 'xsel' (Linux), 'pbcopy' (macOS), o que estás en Windows.")
-    else:
-        st.warning("No hay texto reescrito para copiar.")
 
 # --- Scripts Frecuentes (Sidebar) ---
 st.sidebar.header("📚 Scripts Frecuentes")

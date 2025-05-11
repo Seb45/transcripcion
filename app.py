@@ -22,6 +22,97 @@ except (FileNotFoundError, KeyError): # Manejar ambos errores si secrets.toml no
     if GOOGLE_API_KEY == "TU_GOOGLE_API_KEY_AQUI":
         st.warning("API Key de Google Gemini no configurada de forma segura. Funcionalidad de IA limitada.")
 
+def get_prompt_for_style(text_to_rewrite, style_key):
+    base_instructions = """
+    Eres un asistente experto en comunicación y redacción en español.
+    Tu tarea es tomar la 'Frase original' y transformarla en una 'Frase reescrita'.
+    Asegúrate de que la 'Frase reescrita' utilice impecablemente los signos de puntuación (comas, puntos, interrogaciones, exclamaciones, etc.),
+    las mayúsculas y minúsculas según las normas del español, y todos los acentos (tildes) necesarios.
+    Entrega únicamente la frase reescrita, sin introducciones, comentarios sobre tu proceso, ni despedidas.
+    """
+
+    style_specific_instructions = ""
+    if style_key == "concise_clear":
+        style_specific_instructions = """
+        El estilo debe ser **Conciso y Claro**:
+        - Ve directo al punto, eliminando cualquier redundancia o palabra innecesaria.
+        - El mensaje debe ser breve, fácil de entender y profesional.
+        """
+    elif style_key == "sales_persuasive":
+        style_specific_instructions = """
+        El estilo debe ser **Vendedor Persuasivo**:
+        - Utiliza un lenguaje que incite a la acción o genere fuerte interés en un producto/servicio.
+        - Destaca beneficios clave y el valor de lo que se ofrece.
+        - Puede ser un poco más entusiasta y directo en su persuasión.
+        """
+    elif style_key == "creative_resolution":
+        style_specific_instructions = """
+        El estilo debe ser **Creativo y Resolutivo, enfocado en la Satisfacción**:
+        - Adopta un tono empático, cálido y tranquilizador.
+        - Sé creativo en la forma de expresar la solución o el mensaje.
+        - El enfoque principal es la satisfacción del cliente y la resolución efectiva y positiva de su consulta o necesidad.
+        - El lenguaje debe ser fluido y natural, buscando una conexión genuina.
+        """
+    elif style_key == "ideal_versatile":
+        style_specific_instructions = """
+        El estilo debe ser una **Combinación Ideal y Versátil**:
+        - **Claridad Fundamental:** El mensaje siempre debe ser claro y fácil de entender. Usa la concisión cuando sea apropiado, pero no a expensas de la amabilidad o la completitud.
+        - **Toque Persuasivo (Contextual):** Si la frase original lo amerita o sugiere una oportunidad, incorpora sutilmente elementos persuasivos, enfocados en el valor o los beneficios, sin ser agresivo.
+        - **Enfoque en el Cliente y Creatividad:** Prioriza la empatía, la satisfacción y la resolución. Usa un lenguaje creativo y natural para conectar y transmitir confianza. Adapta la calidez y el detalle según el contexto implícito.
+        - El objetivo es una comunicación profesional, efectiva y adaptativa.
+        """
+
+    return f"{base_instructions}\n{style_specific_instructions}\nFrase original: \"{text_to_rewrite}\"\nFrase reescrita:"
+
+
+def rewrite_text_styled_gemini(text_to_rewrite, style_key):
+    if not model_rewrite: # Asegúrate de que 'model_rewrite' sea tu modelo Gemini inicializado
+        return "Error: Modelo Gemini para reescritura no inicializado (revisa la API Key)."
+
+    prompt = get_prompt_for_style(text_to_rewrite, style_key)
+    
+    try:
+        response = model_rewrite.generate_content(prompt)
+        rewritten_text = response.text.strip()
+        
+        # Limpieza opcional si el modelo a veces incluye el prefijo "Frase reescrita:"
+        if rewritten_text.lower().startswith("frase reescrita:"):
+            rewritten_text = rewritten_text[len("frase reescrita:"):].strip()
+            
+        return rewritten_text
+    except Exception as e:
+        st.error(f"Error al reescribir el texto con Gemini (Estilo: {style_key}): {e}")
+        # Para depuración, puedes imprimir o loguear el prompt completo si es necesario
+        # print(f"--- PROMPT DEBUG (Estilo: {style_key}) ---\n{prompt}\n-------------------------------")
+        return f"Error al reescribir. (Detalles en logs)"
+
+# --- Asegúrate de tener tu inicialización del modelo Gemini aquí ---
+# (Este es un ejemplo, usa tu configuración existente para GOOGLE_API_KEY y el modelo)
+try:
+    # Intenta cargar la API key desde los secretos de Streamlit (para despliegue)
+    GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
+except (FileNotFoundError, KeyError):
+    GOOGLE_API_KEY = None # O tu key local para pruebas, pero con advertencia
+    st.warning("API Key de Google Gemini no encontrada en los secretos de Streamlit. Usar solo para desarrollo local si se configura manualmente.")
+
+model_rewrite = None # Definir model_rewrite globalmente o pasarlo a la función
+if GOOGLE_API_KEY:
+    try:
+        genai.configure(api_key=GOOGLE_API_KEY)
+        generation_config_rewrite = genai.GenerationConfig(
+            temperature=0.75 # Ajusta la temperatura general para los estilos
+        )
+        model_rewrite = genai.GenerativeModel(
+            model_name='gemini-1.5-flash', # O 'gemini-1.5-pro' para mejor calidad
+            generation_config=generation_config_rewrite
+        )
+        st.sidebar.success("Modelo Gemini (reescritura) inicializado.")
+    except Exception as e:
+        st.sidebar.error(f"Error inicializando modelo Gemini: {e}")
+else:
+    st.sidebar.error("API Key de Google no configurada. Reescritura deshabilitada.")
+
+
 model_rewrite = None
 if GOOGLE_API_KEY and GOOGLE_API_KEY != "TU_GOOGLE_API_KEY_AQUI":
     genai.configure(api_key=GOOGLE_API_KEY)
@@ -207,14 +298,41 @@ if transcribed_text_area != st.session_state.transcribed_text:
 
 # --- Refinar Texto con Gemini ---
 st.header("✍️ Refinar Texto (con Gemini)")
+
+# Diccionario de estilos disponibles
+rewrite_styles = {
+    "Conciso y Claro": "concise_clear",
+    "Vendedor Persuasivo": "sales_persuasive",
+    "Creativo y Resolutivo (Satisfacción)": "creative_resolution",
+    "Combinación Ideal (Versátil)": "ideal_versatile"
+}
+# Guardar la selección en el estado de la sesión para que persista
+if 'selected_style_label' not in st.session_state:
+    st.session_state.selected_style_label = "Conciso y Claro" # Estilo por defecto
+
+selected_style_label = st.selectbox(
+    "Elige un estilo de refinamiento:",
+    options=list(rewrite_styles.keys()),
+    key="style_selector", # Clave para el widget
+    index=list(rewrite_styles.keys()).index(st.session_state.selected_style_label) # Mantener selección
+)
+# Actualizar el estado de la sesión si cambia la selección
+st.session_state.selected_style_label = selected_style_label
+selected_style_key = rewrite_styles[selected_style_label]
+
+
 if 'rewritten_text' not in st.session_state:
     st.session_state.rewritten_text = ""
 
-if st.button("Reescribir Texto (Cordial, Conciso, Claro)"):
+if st.button(f"Reescribir Texto (Estilo: {selected_style_label})"):
     if st.session_state.transcribed_text:
-        if model_rewrite: # Verificar que el modelo esté inicializado
-            with st.spinner("Reescribiendo con Gemini..."):
-                st.session_state.rewritten_text = rewrite_text_cordial_gemini(st.session_state.transcribed_text)
+        if model_rewrite: # Verificar que el modelo Gemini esté inicializado
+            with st.spinner(f"Reescribiendo con Gemini en estilo '{selected_style_label}'..."):
+                # Llamaremos a una nueva función que maneje los estilos
+                st.session_state.rewritten_text = rewrite_text_styled_gemini(
+                    st.session_state.transcribed_text,
+                    selected_style_key # Pasamos la clave del estilo seleccionado
+                )
         else:
             st.error("La función de reescritura no está disponible. Verifica la configuración de la API Key de Gemini.")
     else:
@@ -223,6 +341,9 @@ if st.button("Reescribir Texto (Cordial, Conciso, Claro)"):
 rewritten_text_display = st.text_area("Texto Reescrito:", value=st.session_state.rewritten_text, height=150, key="rewritten_display_main")
 if rewritten_text_display != st.session_state.rewritten_text:
     st.session_state.rewritten_text = rewritten_text_display
+    
+
+
 
 
 # --- Scripts Frecuentes (Sidebar) ---

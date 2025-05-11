@@ -12,51 +12,68 @@ import pyperclip
 import speech_recognition as sr
 from audiorecorder import audiorecorder
 
-# --- Configuración de la API Key de Gemini ---
-try:
-    # Intenta cargar la API key desde los secretos de Streamlit (para despliegue)
-    GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
-except FileNotFoundError:
-    # Para desarrollo local, si no usas secrets.toml
-    # Considera usar python-dotenv para cargar desde un archivo .env
-    # from dotenv import load_dotenv
-    # import os
-    # load_dotenv()
-    # GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-    # Si no, puedes ponerla aquí temporalmente para pruebas (NO RECOMENDADO PARA PRODUCCIÓN)
-    GOOGLE_API_KEY = "TU_GOOGLE_API_KEY_AQUI" # ¡RECUERDA CAMBIAR ESTO Y PROTEGER TU KEY!
-    if GOOGLE_API_KEY == "TU_GOOGLE_API_KEY_AQUI":
-        st.warning("API Key de Google Gemini no configurada de forma segura. Usando valor placeholder.")
 
+# ... (otras importaciones que ya tienes como speech_recognition, audiorecorder, etc.)
+
+# --- Configuración de la API Key de Gemini y Modelo (como la tienes) ---
+try:
+    GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
+except (FileNotFoundError, KeyError): # Manejar ambos errores si secrets.toml no existe o la key no está.
+    GOOGLE_API_KEY = "TU_GOOGLE_API_KEY_AQUI" # Placeholder
+    if GOOGLE_API_KEY == "TU_GOOGLE_API_KEY_AQUI":
+        st.warning("API Key de Google Gemini no configurada de forma segura. Funcionalidad de IA limitada.")
+
+model_rewrite = None
 if GOOGLE_API_KEY and GOOGLE_API_KEY != "TU_GOOGLE_API_KEY_AQUI":
     genai.configure(api_key=GOOGLE_API_KEY)
-    # Inicializar el modelo (puedes elegir entre diferentes versiones de Gemini)
-    # Por ejemplo, 'gemini-1.5-flash' para respuestas rápidas o 'gemini-1.5-pro' para tareas más complejas.
-    # A la fecha de esta respuesta (mayo 2025), estos son modelos recientes. Verifica la documentación para los últimos disponibles.
-    model_rewrite = genai.GenerativeModel('gemini-1.5-flash')
-    model_suggestion = genai.GenerativeModel('gemini-1.5-flash') # Puedes usar el mismo o diferentes modelos
+    # Puedes configurar el modelo aquí con parámetros de generación si lo deseas
+    generation_config_rewrite = genai.GenerationConfig(
+        temperature=0.7  # Un valor entre 0.0 y 1.0. Más alto = más creativo/diverso.
+                         # 0.7 es un buen punto de partida para equilibrio.
+    )
+    model_rewrite = genai.GenerativeModel(
+        model_name='gemini-1.5-flash', # o 'gemini-1.5-pro' para mayor calidad (puede ser más lento/costoso)
+        generation_config=generation_config_rewrite
+    )
 else:
-    model_rewrite = None
-    model_suggestion = None
-    st.error("La API Key de Google Gemini no está configurada. Las funciones de IA generativa estarán deshabilitadas.")
-
-# --- Funciones Modificadas para Usar Gemini ---
+    st.error("La API Key de Google Gemini no está configurada. La función de reescritura estará deshabilitada.")
 
 def rewrite_text_cordial_gemini(text_to_rewrite):
     if not model_rewrite:
         return "Error: Modelo Gemini para reescritura no inicializado (revisa la API Key)."
+    
+    # Nuevo prompt más detallado
+    prompt = f"""
+    Tu tarea es reescribir la 'Frase original' en español. La 'Frase reescrita' debe ser:
+    1.  **Cordial y Profesional:** Mantén un tono amable y adecuado para la comunicación con clientes.
+    2.  **Clara y Comprensible:** El mensaje debe ser fácil de entender, sin ambigüedades.
+    3.  **Natural y Fluida:** El texto debe sonar natural, no robótico. Evita la concisión extrema si esto sacrifica la naturalidad o la completitud del mensaje. Busca una expresión bien conectada y agradable de leer.
+    4.  **Gramaticalmente Impecable:** Presta especial atención al uso correcto y completo de:
+        * Signos de puntuación (comas, puntos, signos de interrogación, exclamación, etc.).
+        * Mayúsculas y minúsculas según las normas del español.
+        * Todos los acentos (tildes) necesarios.
+    5.  **Foco en la Reescritura:** Entrega únicamente la frase reescrita. No añadas introducciones, comentarios sobre tu proceso, ni despedidas.
+
+    Frase original: "{text_to_rewrite}"
+    Frase reescrita:
+    """
+    
     try:
-        prompt = f"""
-        Reescribe la siguiente frase para que sea cordial, concisa y clara.
-        No añadas introducciones ni despedidas, solo entrega la frase reescrita.
-        Frase original: "{text_to_rewrite}"
-        Frase reescrita:
-        """
         response = model_rewrite.generate_content(prompt)
-        return response.text.strip()
+        # A veces Gemini puede añadir Markdown para negritas si el prompt es muy estructurado.
+        # Si ves "**Frase reescrita:**" en el output, puedes limpiarlo.
+        # Por ahora, asumimos que .text.strip() es suficiente.
+        rewritten_text = response.text.strip()
+        
+        # Opcional: Limpieza adicional si el modelo a veces incluye el prefijo "Frase reescrita:"
+        if rewritten_text.lower().startswith("frase reescrita:"):
+            rewritten_text = rewritten_text[len("frase reescrita:"):].strip()
+            
+        return rewritten_text
     except Exception as e:
         st.error(f"Error al reescribir el texto con Gemini: {e}")
-        return f"Error al reescribir el texto con Gemini: {e}"
+        return f"Error al reescribir el texto con Gemini: {e} (Prompt utilizado: {prompt[:200]}...)" # Mostrar parte del prompt puede ayudar a depurar
+
 
 def suggest_sales_bridge_gemini(context=""):
     if not model_suggestion:

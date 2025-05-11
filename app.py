@@ -11,7 +11,7 @@ import sqlite3
 import pyperclip
 import speech_recognition as sr
 from audiorecorder import audiorecorder
-
+from streamlit_copy_to_clipboard import st_copy_to_clipboard # Nueva importación
 
 # ... (otras importaciones que ya tienes como speech_recognition, audiorecorder, etc.)
 
@@ -190,7 +190,7 @@ if len(audio_from_recorder) > 0:
             text = r.recognize_google(audio_data_for_sr, language="es-ES")
         
         st.session_state.transcribed_text = text
-        st.success(f"Texto transcrito: {text}")
+        #st.success(f"Texto transcrito: {text}")
 
     except sr.UnknownValueError:
         st.error("Google Speech Recognition no pudo entender el audio.")
@@ -228,13 +228,16 @@ if rewritten_text_display != st.session_state.rewritten_text:
 # --- Copiar al Portapapeles ---
 if st.button("Copiar Texto Reescrito al Portapapeles 📋"):
     if st.session_state.rewritten_text:
-        try:
-            pyperclip.copy(st.session_state.rewritten_text)
-            st.success("¡Texto reescrito copiado al portapapeles!")
-        except pyperclip.PyperclipException as e:
-            st.error(f"No se pudo copiar al portapapeles: {e}. Asegúrate de tener 'xclip' o 'xsel' (Linux), 'pbcopy' (macOS), o que estás en Windows.")
+        # El componente st_copy_to_clipboard crea un botón/enlace clickeable.
+        # El primer argumento es el texto a copiar.
+        # El segundo argumento es la etiqueta del botón/enlace que se mostrará.
+        st_copy_to_clipboard(st.session_state.rewritten_text, "Copiar Texto Reescrito 📋", key="copy_rewritten")
+        # Ya no necesitas st.success() aquí, el componente usualmente maneja su propia retroalimentación visual (puede ser sutil)
+        # o simplemente copia sin un mensaje explícito de Streamlit.
     else:
-        st.warning("No hay texto reescrito para copiar.")
+        # Si no hay texto, puedes mostrar un botón deshabilitado o no mostrar nada
+        st.button("Copiar Texto Reescrito al Portapapeles 📋", disabled=True, key="disabled_copy_rewritten")
+
 
 # --- Scripts Frecuentes (Sidebar) ---
 st.sidebar.header("📚 Scripts Frecuentes")

@@ -1,0 +1,7 @@
+streamlit
+google-generativeai
+pyaudio # Si SpeechRecognition lo sigue necesitando directamente en la nube (a veces las dependencias de audio son complicadas en entornos serverless)
+SpeechRecognition
+streamlit-audiorecorder
+pyperclip # Ten en cuenta las limitaciones de pyperclip en un entorno de servidor.
+# pandas # Si lo usas explícitamente

@@ -11,7 +11,6 @@ import sqlite3
 import pyperclip
 import speech_recognition as sr
 from audiorecorder import audiorecorder
-from streamlit_copy_to_clipboard import st_copy_to_clipboard # Nueva importación
 
 # ... (otras importaciones que ya tienes como speech_recognition, audiorecorder, etc.)
 

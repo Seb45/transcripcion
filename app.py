@@ -132,26 +132,59 @@ st.header("🎤 Transcripción de Voz")
 if 'transcribed_text' not in st.session_state:
     st.session_state.transcribed_text = ""
 
-audio = audiorecorder("Haz clic para grabar", "Grabando...", key="audio_recorder_main")
+# El componente audiorecorder
+# Asegúrate de que la key sea única si tienes varios audiorecorders
+audio_from_recorder = audiorecorder("Haz clic para grabar", "Grabando...", key="audio_recorder_main")
 
-if len(audio) > 0:
-    st.audio(audio.export().read())
-    with open("temp_audio.wav", "wb") as f:
-        f.write(audio.export().read())
-    r = sr.Recognizer()
+if len(audio_from_recorder) > 0:
+    st.audio(audio_from_recorder.export().read()) # Muestra el audio, confirmando que se grabó
+
+    # --- Procesamiento para SpeechRecognition ---
     try:
-        with sr.AudioFile("temp_audio.wav") as source:
-            audio_data = r.record(source)
-        text = r.recognize_google(audio_data, language="es-ES")
+        # audio_from_recorder es un objeto pydub.AudioSegment
+        # Convertir a un formato estándar para SpeechRecognition:
+        # 1. Mono (un solo canal)
+        # 2. Tasa de muestreo de 16000 Hz (común para STT)
+        # 3. Profundidad de bits de 16 bits (sample_width = 2 bytes)
+        
+        st.info("Procesando audio para transcripción...")
+
+        audio_segment = audio_from_recorder # Es un AudioSegment de Pydub
+        
+        # Convertir a mono
+        audio_segment = audio_segment.set_channels(1)
+        
+        # Establecer tasa de muestreo (e.g., 16kHz)
+        audio_segment = audio_segment.set_frame_rate(16000)
+        
+        # Establecer profundidad de bits a 16-bit PCM (sample_width = 2 bytes)
+        audio_segment = audio_segment.set_sample_width(2)
+
+        # Obtener los datos crudos (bytes), la tasa de muestreo y el ancho de muestra
+        raw_audio_data = audio_segment.raw_data
+        sample_rate = audio_segment.frame_rate
+        sample_width_bytes = audio_segment.sample_width
+
+        # Crear un objeto AudioData para SpeechRecognition
+        audio_data_for_sr = sr.AudioData(raw_audio_data, sample_rate, sample_width_bytes)
+
+        r = sr.Recognizer()
+        with st.spinner("Transcribiendo audio..."):
+            text = r.recognize_google(audio_data_for_sr, language="es-ES")
+        
         st.session_state.transcribed_text = text
         st.success(f"Texto transcrito: {text}")
+
     except sr.UnknownValueError:
         st.error("Google Speech Recognition no pudo entender el audio.")
     except sr.RequestError as e:
         st.error(f"No se pudieron obtener resultados del servicio Google Speech Recognition; {e}")
     except Exception as e:
-        st.error(f"Ocurrió un error al procesar el audio: {e}")
-
+        # Mostrar el error específico para ayudar a depurar más si es necesario
+        st.error(f"Ocurrió un error detallado al procesar el audio: {type(e).__name__} - {e}")
+        # También puedes loggear el error completo si quieres más detalles en los logs de Streamlit Cloud
+        # import traceback
+        # st.error(traceback.format_exc())
 transcribed_text_area = st.text_area("Texto Transcrito:", value=st.session_state.transcribed_text, height=150, key="transcribed_display_main")
 if transcribed_text_area != st.session_state.transcribed_text:
     st.session_state.transcribed_text = transcribed_text_area
